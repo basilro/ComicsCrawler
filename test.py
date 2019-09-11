@@ -29,19 +29,26 @@ class MyApp(QMainWindow):
 
         self.menu() #메뉴
         self.naver = 'https://comic.naver.com'
+        self.manamoa = 'https://manamoa13.net'
         self.dic = {}
+
+         self.cb = QComboBox(self)
+        self.cb.addItem('마나모아')
+        self.cb.addItem('네이버')
+        self.cb.move(20,30)
+        self.cb.resize(70,20)
 
         btn = QPushButton('조회', self)
         btn.setCheckable(True)
-        btn.move(300,30)
+        btn.move(400,30)
         btn.resize(70,25)
         btn.toggle()
         btn.clicked.connect(self.search)
 
         self.txt = QTextEdit('https://page.kakao.com/viewer?productId=53634510',self)
         self.txt.setAcceptDrops(False)
-        self.txt.move(20, 30)
-        self.txt.resize(250,25)
+        self.txt.move(100, 30)
+        self.txt.resize(280,25)
 
         self.list = QListWidget(self)
         self.list.move(20,70)
@@ -52,7 +59,7 @@ class MyApp(QMainWindow):
         self.setWindowTitle('테스트') #메인타이틀
         self.setWindowIcon(QIcon('title.png'))  #메인아이콘
         self.center()   #위치
-        self.resize(400, 300)   #크기
+        self.resize(500, 300)   #크기
         self.show()
 
     #TODO 창위치지정
@@ -79,39 +86,42 @@ class MyApp(QMainWindow):
     def search(self):
 
         url =self.txt.toPlainText()
+        type = self.cb.currentText()
         print(url)
-        html = requests.get(url, headers={'referer': 'https://page.kakao.com/home?seriesId=53634406','User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.132 Safari/537.36'})
-        print(html)
         
-        return
+        if(type == '네이버'):
+            html = requests.get(url, headers={'referer': 'https://page.kakao.com/home?seriesId=53634406','User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.132 Safari/537.36'})
+            print(html)
 
-        #네이버웹툰 처음페이지조회
-        html = requests.get(url, headers={'referer': 'https://comic.naver.com/webtoon/weekday.nhn'})
+            return
 
-        #웹툰명
-        self.name = BeautifulSoup(html.text, 'html.parser').find('title').text.replace(' :: 네이버 만화','')
+            #네이버웹툰 처음페이지조회
+            html = requests.get(url, headers={'referer': 'https://comic.naver.com/webtoon/weekday.nhn'})
 
-        # 폴더생성
-        try:
-            if not (os.path.isdir(self.name)):
-                os.makedirs(os.path.join(self.name))
-        except OSError as e:
-            if e.errno != errno.EEXIST:
-                print('폴더 생성 실패')
-                exit()
+            #웹툰명
+            self.name = BeautifulSoup(html.text, 'html.parser').find('title').text.replace(' :: 네이버 만화','')
 
-        #총페이지수 구하기
-        page_href = url + '&page='
-        last_no = BeautifulSoup(html.text, 'html.parser').find('td', {'class': 'title'}).find('a')['href']
-        no = math.ceil(int(parse.parse_qs(last_no)['no'][0]) / 10)
-        html.close()
-        #print(str(no))
+            # 폴더생성
+            try:
+                if not (os.path.isdir(self.name)):
+                    os.makedirs(os.path.join(self.name))
+            except OSError as e:
+                if e.errno != errno.EEXIST:
+                    print('폴더 생성 실패')
+                    exit()
 
-        for page_count in range(1,no+1):
-            #print(page_href+str(page_count))
-            page = page_href+str(page_count)
-            #print(page)
-            self.list_search(page)
+            #총페이지수 구하기
+            page_href = url + '&page='
+            last_no = BeautifulSoup(html.text, 'html.parser').find('td', {'class': 'title'}).find('a')['href']
+            no = math.ceil(int(parse.parse_qs(last_no)['no'][0]) / 10)
+            html.close()
+            #print(str(no))
+
+            for page_count in range(1,no+1):
+                #print(page_href+str(page_count))
+                page = page_href+str(page_count)
+                #print(page)
+                self.list_search(page)
 
 
         '''썸네일 다운
