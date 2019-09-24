@@ -2,22 +2,14 @@ import errno
 import os
 import re
 import sys
-from urllib import response
-from urllib.request import urlretrieve
 from urllib import parse
 import math
-
 import requests
-import self as self
-import soup as soup
 from PyQt5.QtGui import QIcon
-from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication, QWidget, QAction, qApp, QMainWindow, QDesktopWidget, QPushButton, QVBoxLayout, \
     QLabel, QTextEdit, QListWidget, QCheckBox, QListWidgetItem, QComboBox
 from bs4 import BeautifulSoup
-from pprint import pprint
 from selenium import webdriver
-from selenium.webdriver.support.wait import WebDriverWait
 import time
 
 
@@ -33,10 +25,12 @@ class MyApp(QMainWindow):
         self.menu()  # 메뉴
         self.naver = 'https://comic.naver.com'
         self.manamoa = 'https://manamoa14.net'
+        self.toonkor = 'https://toonkor.haus'
         self.dic = {}
 
         self.cb = QComboBox(self)
 
+        self.cb.addItem('툰코')
         self.cb.addItem('마나모아')
         self.cb.addItem('네이버')
         self.cb.move(20, 30)
@@ -49,7 +43,7 @@ class MyApp(QMainWindow):
         btn.toggle()
         btn.clicked.connect(self.search)
 
-        self.txt = QTextEdit('https://page.kakao.com/viewer?productId=53634510', self)
+        self.txt = QTextEdit('https://wfwf42.com/list?toon=3885', self)
         self.txt.setAcceptDrops(False)
         self.txt.move(100, 30)
         self.txt.resize(280, 25)
@@ -89,23 +83,22 @@ class MyApp(QMainWindow):
         fileMenu = menubar.addMenu('&File')
         fileMenu.addAction(exitAction)
 
-
+    #조회
     def search(self):
         url = self.txt.toPlainText()
         type = self.cb.currentText()
         print(url)
 
         if(type == '마나모아'):
-            self.list_search(url)
-            return
-
-        if (type == '네이버'):
-            html = requests.get(url, headers={'referer': 'https://page.kakao.com/home?seriesId=53634406',
-                                              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.132 Safari/537.36'})
-            print(html)
-
-            return
-
+            #마나모아주소가 맞는지 확인
+            regex = re.sub('(https:\/\/)','', re.sub('[0-9]+.(.+?)\/(.+?)*','',url))
+            if not(regex == 'manamoa'):
+                print('마나모아 주소가 아닙니다 다시 입력해주세요')
+                return
+            self.list_search(url,type)
+        elif(type == '툰코'):
+            self.list_search(url, type)
+        elif(type == '네이버'):
             # 네이버웹툰 처음페이지조회
             html = requests.get(url, headers={'referer': 'https://comic.naver.com/webtoon/weekday.nhn'})
 
@@ -155,21 +148,82 @@ class MyApp(QMainWindow):
             title_list = [t.text for t in data]
             pprint(title_list)
         '''
-
-    def list_search(self,page):
+    # 웹툰리스트 조회
+    def list_search(self,page,type):
         option = webdriver.ChromeOptions()
         option.add_argument('headless')
         option.add_argument('disable-gpu')
 
-        driver = webdriver.Chrome('chromedriver')  # ,chrome_options=option)
+        driver = webdriver.Chrome('chromedriver')#,chrome_options=option)
+        driver.get(page)
+        try:
+            if(type == '마나모아'):
+                time.sleep(5)
+                self.name = BeautifulSoup(driver.page_source, 'html.parser').find('div', {'class': 'red title'}).text
+                soup = BeautifulSoup(driver.page_source, 'html.parser').find('div', {'class': 'chapter-list'}).find_all('a')
+            elif(type == '툰코'):
+                self.name = BeautifulSoup(driver.page_source, 'html.parser').find('meta', {'name': 'title'}).get('content')
+                soup = BeautifulSoup(driver.page_source, 'html.parser').find('table', {'class': 'web_list'}).find_all('td',{'class':'content__title'})
 
-        driver.get('https://manamoa14.net/bbs/page.php?hid=manga_detail&manga_id=10857')
-        time.sleep(5)
-        soup = BeautifulSoup(driver.page_source, 'html.parser').find('div', {'class': 'chapter-list'}).find_all('a')
-        for data in soup:
-            print(data.get('href'))
+            list = []
+            for data in soup:
+                if(type == '마나모아'):
+                    list.append(self.manamoa + data.get('href'))
+                elif(type == '툰코'):
+                    list.append(self.toonkor + data.get('data-role'))
+
+            for url in list:
+                self.image_download(driver,url,type)
+
+        except Exception as ex:
+            print(ex)
 
         driver.quit()
+
+    def image_download(self, driver, url, type):
+        #print(url)
+        driver.get(url)
+        time.sleep(1)
+        try:
+            if(type == '마나모아'):
+                title = BeautifulSoup(driver.page_source, 'html.parser').find('meta', {'name': 'title'}).get('content')
+                soup = BeautifulSoup(driver.page_source, 'html.parser').find('div', {'class': 'view-content scroll-viewer'}).find_all('img')
+            elif(type == '툰코'):
+                title = BeautifulSoup(driver.page_source, 'html.parser').find('meta', {'name': 'title'}).get('content')
+                soup = BeautifulSoup(driver.page_source, 'html.parser').find('div', {'id': 'toon_img'}).find_all('img')
+        except Exception as ex:
+            print(ex)
+
+        print(self.name,title)
+        #print(soup)
+        # 화폴더생성
+        try:
+            if not (os.path.isdir(self.name + '/' + title)):
+                os.makedirs(os.path.join(self.name + '/' + title))
+        except OSError as e:
+            if e.errno != errno.EEXIST:
+                print('폴더 생성 실패')
+                exit()
+
+        filename = 1
+        for img in soup:
+            src = img.get('src')
+            print(src)
+            try:
+                if(type == '마나모아'):
+                    res = requests.get(src, headers={'referer': url})
+                else:
+                    res = requests.get(src)
+            except Exception as ex:
+                print(ex)
+
+            filefullname = self.name + '/' + title + '/' + str(filename) + '.jpg'
+            #print(filefullname)
+            print(str(filename)+'/'+str(len(soup)))
+            if not os.path.isfile(filefullname):
+                with open(filefullname, 'wb') as f:
+                    f.write(res.content)
+            filename = filename + 1  # 파일명
 
     # 네이버웹툰 리스트목록별 조회
     def naver_list_search(self, page):
@@ -194,18 +248,16 @@ class MyApp(QMainWindow):
         # 리스트별조회
         for title in self.dic:
             print(self.dic[title])
-            self.image_download(title, self.dic[title])
+            self.naver_image_download(title, self.dic[title])
 
 
     # 네이버웹툰 이미지 다운로드
-    def image_download(self, title, url):
+    def naver_image_download(self, title, url):
         print('image_download', title, url)
         # 화폴더생성
         try:
             if not (os.path.isdir(self.name + '/' + title)):
                 os.makedirs(os.path.join(self.name + '/' + title))
-            else:
-                return  # 폴더가 있으면 다운받은 목록이라고 생각하고 다운안함
         except OSError as e:
             if e.errno != errno.EEXIST:
                 print('폴더 생성 실패')
