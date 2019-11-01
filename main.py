@@ -11,7 +11,11 @@ from PyQt5.QtWidgets import QApplication, QWidget, QAction, qApp, QMainWindow, Q
 from bs4 import BeautifulSoup
 from selenium import webdriver
 import time
+import logging
 
+from selenium.webdriver.common.keys import Keys
+logger = logging.getLogger(__name__)
+timer = 1
 
 class MyApp(QMainWindow):
 
@@ -26,10 +30,19 @@ class MyApp(QMainWindow):
         self.naver = 'https://comic.naver.com'
         self.manamoa = 'https://manamoa14.net'
         self.toonkor = 'https://toonkor.haus'
+        self.wtoon = 'https://wtoon17.com'
+        self.daum = 'http://webtoon.daum.net'
+        self.lezhin = 'https://www.lezhin.com/ko/comic'
+        self.top = 'https://toptoon.com'
         self.dic = {}
 
         self.cb = QComboBox(self)
 
+        self.cb.addItem('탑툰')
+        self.cb.addItem('레진')
+        self.cb.addItem('뉴토끼')
+        self.cb.addItem('다음')
+        self.cb.addItem('W툰')
         self.cb.addItem('툰코')
         self.cb.addItem('마나모아')
         self.cb.addItem('네이버')
@@ -43,7 +56,7 @@ class MyApp(QMainWindow):
         btn.toggle()
         btn.clicked.connect(self.search)
 
-        self.txt = QTextEdit('https://wfwf42.com/list?toon=3885', self)
+        self.txt = QTextEdit('https://toptoon.com/weekly/ep_list/the_subjects_contract', self)
         self.txt.setAcceptDrops(False)
         self.txt.move(100, 30)
         self.txt.resize(280, 25)
@@ -89,73 +102,75 @@ class MyApp(QMainWindow):
         type = self.cb.currentText()
         print(url)
 
-        if(type == '마나모아'):
-            #마나모아주소가 맞는지 확인
-            regex = re.sub('(https:\/\/)','', re.sub('[0-9]+.(.+?)\/(.+?)*','',url))
-            if not(regex == 'manamoa'):
-                print('마나모아 주소가 아닙니다 다시 입력해주세요')
-                return
-            self.list_search(url,type)
-        elif(type == '툰코'):
-            self.list_search(url, type)
-        elif(type == '네이버'):
-            # 네이버웹툰 처음페이지조회
-            html = requests.get(url, headers={'referer': 'https://comic.naver.com/webtoon/weekday.nhn'})
-
-            # 웹툰명
-            self.name = BeautifulSoup(html.text, 'html.parser').find('title').text.replace(' :: 네이버 만화', '')
-
-            # 폴더생성
-            try:
-                if not (os.path.isdir(self.name)):
-                    os.makedirs(os.path.join(self.name))
-            except OSError as e:
-                if e.errno != errno.EEXIST:
-                    print('폴더 생성 실패')
-                    exit()
-
-            # 총페이지수 구하기
-            page_href = url + '&page='
-            last_no = BeautifulSoup(html.text, 'html.parser').find('td', {'class': 'title'}).find('a')['href']
-            no = math.ceil(int(parse.parse_qs(last_no)['no'][0]) / 10)
-            html.close()
-            # print(str(no))
-
-            for page_count in range(1, no + 1):
-                # print(page_href+str(page_count))
-                page = page_href + str(page_count)
-                # print(page)
-                self.naver_list_search(page)
-
-        '''썸네일 다운
-        day_list = soup.find('div', {'class': 'col_inner'})
-        li_list = []
-        #for data in day_list:
-        #    li_list.extend(data.findAll('li'))
-        li_list.extend(day_list.findAll('li'))
-        for li in li_list:
-            img = li.find('img')
-            title = img['title']
-            img_src = img['src']
-            print(title, img_src)
-            urlretrieve(img_src, './webtoon/' + title + '.jpg')
-        '''
-
-        '''요일별 타이틀 구하기
-        day_list = soup.findAll('div',{'class':'col_inner'})
-        for day in day_list:
-            data = day.findAll('a',{'class':'title'})
-            title_list = [t.text for t in data]
-            pprint(title_list)
-        '''
-    # 웹툰리스트 조회
-    def list_search(self,page,type):
+        timer = 1
+        #selenium 초기화
         option = webdriver.ChromeOptions()
         option.add_argument('headless')
         option.add_argument('disable-gpu')
 
-        driver = webdriver.Chrome('chromedriver')#,chrome_options=option)
+        driver = webdriver.Chrome('chromedriver')  # ,chrome_options=option)
+
+        if(type == '마나모아'):
+            #마나모아주소가 맞는지 확인
+            regex = re.sub('(https:\/\/)','', re.sub('[0-9]+.(.+?)\/(.+?)*','',url))
+            if not(regex == 'manamoa'):
+                logger.error('마나모아 주소가 아닙니다 다시 입력해주세요')
+                return
+            self.list_search(driver, url, type)
+        elif(type == '툰코'):
+            self.list_search(driver, url, type)
+        elif(type == 'W툰'):
+            self.list_search(driver, url, type)
+        elif (type == '다음'):
+            self.paging(driver, url, type)
+        elif(type == '네이버'):
+            self.paging(driver, url, type)
+        elif(type == '레진'):
+            self.list_search(driver, url, type)
+        elif (type == '뉴토끼'):
+            self.list_search(driver, url, type)
+        elif(type == '탑툰'):
+            self.list_search(driver, url, type)
+
+        driver.quit()
+        print('다운끝')
+
+    #페이징처리
+    def paging(self, driver, page, type):
         driver.get(page)
+        time.sleep(3)
+        try:
+            # 마지막페이지번호 구하기
+            if (type == '다음'):
+                self.login(driver, type)
+                last_no = BeautifulSoup(driver.page_source, 'html.parser').find('span', {'class': 'inner_pages'}).find_all('a',{'class':'link_page'})[-1].text
+            elif(type == '네이버'):
+                last_no = BeautifulSoup(driver.page_source, 'html.parser').find('td', {'class': 'title'}).find('a').get('href')#['href']
+                last_no = math.ceil(int(parse.parse_qs(last_no)['no'][0]) / 10)
+
+            for count in range(1, int(last_no) + 1):
+                if(type == '다음'):
+                    url = page + '#pageNo=' + str(count)
+                elif(type == '네이버'):
+                    url = page + '&page=' + str(count)
+                print(url)
+                timer = 3
+                self.list_search(driver, url, type)
+        except Exception as ex:
+            logger.error(ex)
+            logger.error(BeautifulSoup(driver.page_source, 'html.parser').find('span', {'class': 'inner_pages'}))
+            self.paging(driver,page,type)
+
+    # 웹툰리스트 조회
+    def list_search(self,driver,page,type):
+        #option = webdriver.ChromeOptions()
+        #option.add_argument('headless')
+        #option.add_argument('disable-gpu')
+
+        #driver = webdriver.Chrome('chromedriver')  # ,chrome_options=option)
+
+        driver.get(page)
+        time.sleep(timer)
         try:
             if(type == '마나모아'):
                 time.sleep(5)
@@ -164,141 +179,215 @@ class MyApp(QMainWindow):
             elif(type == '툰코'):
                 self.name = BeautifulSoup(driver.page_source, 'html.parser').find('meta', {'name': 'title'}).get('content')
                 soup = BeautifulSoup(driver.page_source, 'html.parser').find('table', {'class': 'web_list'}).find_all('td',{'class':'content__title'})
+            elif(type == 'W툰'):
+                self.name = BeautifulSoup(driver.page_source, 'html.parser').find('meta', {'name': 'title'}).get('content')
+                soup = BeautifulSoup(driver.page_source, 'html.parser').find('ul', {'class': 'list'}).find_all('a')
+            elif (type == '다음'):
+                self.login(driver, type)
+                self.name = BeautifulSoup(driver.page_source, 'html.parser').find('meta', {'property': 'title'}).get('content')
+                if not BeautifulSoup(driver.page_source, 'html.parser').find('ul',{'class': 'clear_g list_update'}).find_all('a', {'class': 'link_wt'}):
+                    while True:
+                        logger.warning('list loading.....')
+                        time.sleep(1)
+                        if BeautifulSoup(driver.page_source, 'html.parser').find('ul',{'class': 'clear_g list_update'}).find_all('a', {'class': 'link_wt'}): break
+                soup = BeautifulSoup(driver.page_source, 'html.parser').find('ul',{'class': 'clear_g list_update'}).find_all('a', {'class': 'link_wt'})
+            elif(type == '네이버'):
+                self.name = BeautifulSoup(driver.page_source, 'html.parser').find('title').text.replace(' :: 네이버 만화', '')
+                soup = BeautifulSoup(driver.page_source, 'html.parser').find('table', {'class': 'viewList'}).find_all('td',{'class': 'title'})
+            elif(type == '레진'):
+                self.name = BeautifulSoup(driver.page_source, 'html.parser').find('h2',{'class':'comicInfo__title'}).text
+                soup = BeautifulSoup(driver.page_source, 'html.parser').find('ul', {'id': 'comic-episode-list'}).find_all('div',{'class':'episode-name ellipsis'})
+            elif (type == '뉴토끼'):
+                self.name = BeautifulSoup(driver.page_source, 'html.parser').find('meta', {'name': 'subject'}).get('content')
+                soup = BeautifulSoup(driver.page_source, 'html.parser').find('ul', {'class': 'list-body'}).find_all('a',{'class':'item-subject'})
+            elif(type == '탑툰'):
+                self.name = BeautifulSoup(driver.page_source, 'html.parser').find('span', {'class': 'tit_toon'}).text
+                soup = BeautifulSoup(driver.page_source, 'html.parser').find('tbody').find_all('tr',{'class': 'episode_tr'})
 
+            self.name = self.name.replace('/','／').replace('?','？').replace(':','：').replace('|','｜').replace('.','．').strip()
             list = []
             for data in soup:
                 if(type == '마나모아'):
                     list.append(self.manamoa + data.get('href'))
                 elif(type == '툰코'):
                     list.append(self.toonkor + data.get('data-role'))
+                elif (type == 'W툰'):
+                    list.append(self.wtoon + data.get('href'))
+                elif(type == '다음'):
+                    list.append(self.daum + data.get('href'))
+                elif(type == '네이버'):
+                    list.append(self.naver + data.find('a').get('href'))
+                elif(type == '레진'):
+                    count = int(data.text)
+                    list.append(page + '/' + str(count))
+                elif (type == '뉴토끼'):
+                    list.append(data.get('href'))
+                elif(type == '탑툰'):
+                    list.append(page.replace('ep_list','ep_view') + '/' + data.get('data-episode-id'))
 
             for url in list:
-                self.image_download(driver,url,type)
+                self.image_search(driver,url,type)
 
         except Exception as ex:
-            print(ex)
+            logger.error(ex)
 
-        driver.quit()
+        #driver.quit()
 
-    def image_download(self, driver, url, type):
+    #이미지 조회
+    def image_search(self, driver, url, type):
         #print(url)
         driver.get(url)
-        time.sleep(1)
+        time.sleep(timer)
         try:
             if(type == '마나모아'):
                 title = BeautifulSoup(driver.page_source, 'html.parser').find('meta', {'name': 'title'}).get('content')
                 soup = BeautifulSoup(driver.page_source, 'html.parser').find('div', {'class': 'view-content scroll-viewer'}).find_all('img')
             elif(type == '툰코'):
                 title = BeautifulSoup(driver.page_source, 'html.parser').find('meta', {'name': 'title'}).get('content')
+                # 이미지로딩 체크
+                if not BeautifulSoup(driver.page_source, 'html.parser').find('div', {'id': 'toon_img'}).find_all('img'):
+                    while True:
+                        logger.warning('loading.....')
+                        time.sleep(1)
+                        if BeautifulSoup(driver.page_source, 'html.parser').find('div', {'id': 'toon_img'}).find_all('img') : break
                 soup = BeautifulSoup(driver.page_source, 'html.parser').find('div', {'id': 'toon_img'}).find_all('img')
+            elif (type == 'W툰'):
+                title = BeautifulSoup(driver.page_source, 'html.parser').find('meta', {'name': 'title'}).get('content')
+                # 이미지로딩 체크
+                if not BeautifulSoup(driver.page_source, 'html.parser').find('div', {'class': 'wbody'}).find_all('img'):
+                    while True:
+                        logger.warning('loading.....')
+                        time.sleep(1)
+                        if BeautifulSoup(driver.page_source, 'html.parser').find('div', {'class': 'wbody'}).find_all('img'): break
+                soup = BeautifulSoup(driver.page_source, 'html.parser').find('div', {'class': 'wbody'}).find_all('img')
+            elif (type == '뉴토끼'):
+                loading = '/img/loading-image.gif'
+                while True:
+                    src = BeautifulSoup(driver.page_source, 'html.parser').find('div',{'class': 'view-content'}).find_all('img')[-1].get('src')
+                    #print(src)
+                    if(src != loading): break
+                    driver.find_element_by_tag_name('body').send_keys(Keys.PAGE_DOWN)
+                    time.sleep(0.1)
+
+                title = BeautifulSoup(driver.page_source, 'html.parser').find('meta', {'name': 'subject'}).get('content')
+                soup = BeautifulSoup(driver.page_source, 'html.parser').find('div', {'class': 'view-content'}).find_all('img')
+            elif(type == '탑툰'):
+                if (BeautifulSoup(driver.page_source, 'html.parser').find('div', {'class': 'sns_join2 clearfix'}) != None):
+                    driver.get(BeautifulSoup(driver.page_source, 'html.parser').find('a',{'class':'action sns_naver2'}).get('href'))
+
+                title = BeautifulSoup(driver.page_source, 'html.parser').find('p', {'class': 'title'}).text + '_' + BeautifulSoup(driver.page_source, 'html.parser').find('p', {'class': 'stitle'}).text.strip()
+                soup = BeautifulSoup(driver.page_source, 'html.parser').find('div', {'id': 'viewerContentsWrap'}).find_all('img')
+            elif (type == '다음'):
+                #로그인체크
+                self.login(driver,type)
+
+                #이미지로딩 체크
+                if not BeautifulSoup(driver.page_source, 'html.parser').find('div', {'class': 'cont_view'}).find_all('img'):
+                    while True:
+                        logger.warning('loading.....')
+                        time.sleep(1)
+                        # 유료웹툰 체크
+                        chk = BeautifulSoup(driver.page_source, 'html.parser').find('div', {'id': 'payArea'}).find('div', {'class': 'box_payment'})
+                        print(chk)
+                        if chk != None or not chk : return
+                        if BeautifulSoup(driver.page_source, 'html.parser').find('div',{'class': 'cont_view'}).find_all('img'): break
+                title = BeautifulSoup(driver.page_source, 'html.parser').find('meta', {'property': 'title'}).get('content')
+                soup = BeautifulSoup(driver.page_source, 'html.parser').find('div', {'class': 'cont_view'}).find_all('img')
+
+            elif(type == '네이버'):
+                title = BeautifulSoup(driver.page_source, 'html.parser').find('meta', {'property': 'og:title'}).get('content')
+                soup = BeautifulSoup(driver.page_source, 'html.parser').find('div', {'class': 'wt_viewer'}).find_all('img')
+            elif(type == '레진'):
+                if(BeautifulSoup(driver.page_source, 'html.parser').find('form', {'id': 'login-form'}) != None):
+                    id = driver.find_element_by_id("login-email")  # 아이디를 입력할 input 위치
+                    pw = driver.find_element_by_id("login-password")  # 비밀번호를 입력할 input 위치
+                    chk = driver.find_elements_by_name('remember_me')[1]
+                    #chk = driver.find_element_by_xpath("//label[@class='lzCheck']")  # 로그인버튼
+                    #print(id)
+                    #print(login)
+                    #login.click()
+                    #chk.send_keys(Keys.ENTER)
+                    id.clear()
+                    id.send_keys("sica4311@naver.com")
+                    pw.clear()
+                    pw.send_keys("dlawls")
+                    time.sleep(1)
+                    chk.send_keys(Keys.ENTER)
+                    #pw.send_keys(Keys.ENTER)
+                    time.sleep(3)
+                time.sleep(1)
+                title = BeautifulSoup(driver.page_source, 'html.parser').find('title').text.replace(' - 웹툰 - 레진코믹스','')
+                soup = BeautifulSoup(driver.page_source, 'html.parser').find('div', {'id': 'scroll-list'}).find_all('div',{'class':'cut'})
+                print(soup)
+                #time.sleep(10)
+            #return
         except Exception as ex:
-            print(ex)
+            logger.error(ex)
 
         print(self.name,title)
         #print(soup)
+
+        self.download(url,title,soup,type)
+
+    #이미지 다운로드
+    def download(self, url, title, img_list, type):
+        title = title.replace('/','／').replace('?','？').replace(':','：').replace('|','｜').replace('.','．').strip()
+        print(title, '다운시작')
+
         # 화폴더생성
+        #if (type == 'W툰'):
+        #    fordername = self.name + '/' + self.name + '_' + title
+        #else:
+        fordername = self.name + '/' + title
         try:
-            if not (os.path.isdir(self.name + '/' + title)):
-                os.makedirs(os.path.join(self.name + '/' + title))
+            if (os.path.isfile(fordername + '.zip')):
+                return
+            elif not os.path.isdir(fordername):
+                os.makedirs(os.path.join(fordername))
+
         except OSError as e:
             if e.errno != errno.EEXIST:
-                print('폴더 생성 실패')
-                exit()
+                logger.error('폴더 생성 실패')
+                return
 
+        #이미지 다운로드
         filename = 1
-        for img in soup:
+        for img in img_list:
             src = img.get('src')
-            print(src)
+            #print(src)
             try:
-                if(type == '마나모아'):
+                if (type == '마나모아' or type == 'W툰' or type == '다음' or type == '네이버' or type == '레진'):
                     res = requests.get(src, headers={'referer': url})
                 else:
                     res = requests.get(src)
             except Exception as ex:
-                print(ex)
+                logger.error(ex)
 
-            filefullname = self.name + '/' + title + '/' + str(filename) + '.jpg'
-            #print(filefullname)
-            print(str(filename)+'/'+str(len(soup)))
-            if not os.path.isfile(filefullname):
-                with open(filefullname, 'wb') as f:
-                    f.write(res.content)
-            filename = filename + 1  # 파일명
-
-    # 네이버웹툰 리스트목록별 조회
-    def naver_list_search(self, page):
-        print('list_search', page)
-        html = requests.get(page, headers={'referer': 'https://comic.naver.com/webtoon/weekday.nhn'})
-        soup = BeautifulSoup(html.text, 'html.parser').find('table', {'class': 'viewList'}).findAll('td',{'class': 'title'})
-        html.close()
-
-        a_list = []
-        for data in soup:
-            a_list.append(data.find('a'))
-
-        # 리스트 사전에 담기
-        for a in a_list:
-            # print(a)
-            title = re.sub('<.+?>', '', str(a), 0).strip()  # 태그제거
-            # print(title)
-            link = a['href']
-            # print(link)
-            self.dic[title] = self.naver + link
-
-        # 리스트별조회
-        for title in self.dic:
-            print(self.dic[title])
-            self.naver_image_download(title, self.dic[title])
-
-
-    # 네이버웹툰 이미지 다운로드
-    def naver_image_download(self, title, url):
-        print('image_download', title, url)
-        # 화폴더생성
-        try:
-            if not (os.path.isdir(self.name + '/' + title)):
-                os.makedirs(os.path.join(self.name + '/' + title))
-        except OSError as e:
-            if e.errno != errno.EEXIST:
-                print('폴더 생성 실패')
-                exit()
-
-        html = requests.get(url, headers={'referer': 'https://comic.naver.com/webtoon'})
-        # print(html, html.text)
-        soup = BeautifulSoup(html.text, 'html.parser')
-        # print(soup)
-        html.close()
-
-        viewer = soup.findAll('div', {'class': 'wt_viewer'})
-        img_list = []
-        # print(img_list)
-        for tag in viewer:
-            # print(tag)
-            img_list.extend(tag.findAll('img'))
-            # print(id, src)
-
-        src_list = []
-        for img in img_list:
-            # print(img['src'])
-            src_list.append(img['src'])
-
-        # print(src_list)
-        filename = 1  # 파일명은 1~ 순서대로
-        # 이미지 다운요청 그냥하면 referer없어서 다운이안되는관계로 빈값생성후 바이너리데이터를 넣어준다
-        try:
-            for url in src_list:
-                res = requests.get(url, headers={'referer': self.txt.toPlainText()})
-                # print('성공',res)
-                image_data = res.content
-                # print('이미지정보',image_data)
-                filefullname = self.name + '/' + title + '/' + str(filename) + '.jpg'  # 경로+파일명
+            try:
+                filefullname = fordername + '/' + str(filename) + '.jpg'
+                # print(filefullname)
+                if not os.path.isfile(filefullname):
+                    print(str(filename) + '/' + str(len(img_list)))
+                    with open(filefullname, 'wb') as f:
+                        f.write(res.content)
                 filename = filename + 1  # 파일명
-                print('파일명', filefullname)
-                with open(filefullname, 'wb') as f:
-                    f.write(image_data)
-        except Exception as ex:
-            print(ex)
+            except Exception as ex:
+                logger.error(ex)
 
+    def login(self,driver,type):
+        if type == '다음':
+            if (BeautifulSoup(driver.page_source, 'html.parser').find('title').text == 'Daum 로그인'):
+                login = BeautifulSoup(driver.page_source, 'html.parser').find('a',{'class': 'link_login link_dlogin'}).get('href')
+                driver.get(login)
+                id = driver.find_element_by_id("id")  # 아이디를 입력할 input 위치
+                pw = driver.find_element_by_id("inputPwd")  # 비밀번호를 입력할 input 위치
+                login_button = driver.find_element_by_id("loginBtn")  # 로그인버튼
+                id.clear()
+                id.send_keys("fl2004")
+                pw.clear()
+                pw.send_keys("dlawls0205")
+                login_button.click()
+                time.sleep(1)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

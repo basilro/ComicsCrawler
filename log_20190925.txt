@@ -1,0 +1,1 @@
+[list_load] {'마나모아': 'https://manamoa14.net/bbs/page.php?hid=manga_detail&manga_id=4395', '네이버': 'https://comic.naver.com/webtoon/list.nhn?titleId=733413&weekday=sun'}
