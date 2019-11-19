@@ -17,36 +17,42 @@ urls = utils.mainUrl
 toon_name = ''
 def main():
     logger.info('프로그램 시작')
+    #메인 URL 로드 겸 변경 체크
     utils.geturl()
 
+    #웹툰리스트 로드
     list = utils.getList()
     logger.info(list)
 
-    for type, url in list.items():
-        search(type, url)
-
-    logger.info('프로그램 종료')
-    exit()
-
-
-#조회
-def search(type, url):
-    print(url)
-
-    timer = 1
-    #selenium 초기화
+    # selenium 초기화
     option = webdriver.ChromeOptions()
     option.add_argument('headless')
     option.add_argument('disable-gpu')
 
     driver = webdriver.Chrome('chromedriver')  # ,chrome_options=option)
 
+    #웹툰페이지 로스 스타트
+    for page in list:
+        search(driver, page.pageType, page.url)
+
+    driver.quit()
+
+    logger.info('프로그램 종료')
+    exit()
+
+
+#조회
+def search(driver, type, url):
+    print(url)
+
+    timer = 1
+
     if(type == '마나모아'):
-        list_search(driver, url, type)
+        list_search(driver, utils.mainUrl.manamoa + url, type)
     elif(type == '툰코'):
         list_search(driver, url, type)
     elif(type == 'W툰'):
-        list_search(driver, url, type)
+        list_search(driver, utils.mainUrl.wtoon + url, type)
     elif (type == '다음'):
         paging(driver, url, type)
     elif(type == '네이버'):
@@ -54,11 +60,9 @@ def search(type, url):
     elif(type == '레진'):
         list_search(driver, url, type)
     elif (type == '뉴토끼'):
-        list_search(driver, url, type)
+        list_search(driver, utils.mainUrl.newtoki + url, type)
     elif(type == '탑툰'):
         list_search(driver, url, type)
-
-    driver.quit()
 
 #페이징처리
 def paging(driver, page, type):
@@ -125,14 +129,23 @@ def list_search(driver,page,type):
             soup = BeautifulSoup(driver.page_source, 'html.parser').find('tbody').find_all('tr',{'class': 'episode_tr'})
 
         toon_name = toon_name.replace('/','／').replace('?','？').replace(':','：').replace('|','｜').replace('.','．').strip()
+        #마지막 페이지 불러옴
+        lastseq = utils.getLastSeq(toon_name)
+
         list = []
         for data in soup:
             if(type == '마나모아'):
-                list.append(utils.mainUrl.manamoa + data.get('href'))
+                pageurl = utils.mainUrl.manamoa + data.get('href')
+                if lastseq == pageurl : break
+                list.append(pageurl)
             elif(type == '툰코'):
-                list.append(utils.mainUrl.toonkor + data.get('data-role'))
+                pageurl = utils.mainUrl.toonkor + data.get('data-role')
+                if lastseq == pageurl: break
+                list.append(pageurl)
             elif (type == 'W툰'):
-                list.append(utils.mainUrl.wtoon + data.get('href'))
+                pageurl = utils.mainUrl.wtoon + data.get('href')
+                if lastseq == pageurl: break
+                list.append(pageurl)
             elif(type == '다음'):
                 list.append(utils.mainUrl.daum + data.get('href'))
             elif(type == '네이버'):
@@ -141,9 +154,16 @@ def list_search(driver,page,type):
                 count = int(data.text)
                 list.append(page + '/' + str(count))
             elif (type == '뉴토끼'):
-                list.append(data.get('href'))
+                pageurl = data.get('href')
+                if lastseq == pageurl: break
+                list.append(pageurl)
             elif(type == '탑툰'):
-                list.append(page.replace('ep_list','ep_view') + '/' + data.get('data-episode-id'))
+                pageurl = page.replace('ep_list','ep_view') + '/' + data.get('data-episode-id')
+                if lastseq == pageurl: break
+                list.append(pageurl)
+
+        #마지막 페이지 저장
+        utils.setLastSeq(toon_name, list[0])
 
         for url in list:
             image_search(driver,url,type)
@@ -154,7 +174,7 @@ def list_search(driver,page,type):
     #driver.quit()
 
 #이미지 조회
-def image_search(self, driver, url, type):
+def image_search(driver, url, type):
     #print(url)
     driver.get(url)
     time.sleep(timer)
@@ -199,7 +219,7 @@ def image_search(self, driver, url, type):
             soup = BeautifulSoup(driver.page_source, 'html.parser').find('div', {'id': 'viewerContentsWrap'}).find_all('img')
         elif (type == '다음'):
             #로그인체크
-            self.login(driver,type)
+            login(driver,type)
 
             #이미지로딩 체크
             if not BeautifulSoup(driver.page_source, 'html.parser').find('div', {'class': 'cont_view'}).find_all('img'):
@@ -246,7 +266,7 @@ def image_search(self, driver, url, type):
     print(toon_name,title)
     #print(soup)
 
-    self.download(url,title,soup,type)
+    download(url,title,soup,type)
 
 #이미지 다운로드
 def download(url, title, img_list, type):

@@ -31,6 +31,36 @@ class mainUrl:
     toptoon = ''
     kakao = ''
 
+class pageList:
+    pageType = ''
+    url = ''
+
+#마지막 받은 페이지 저장
+def setLastSeq(title, seq):
+    try:
+        with open('LastSeq.json','rt',encoding='UTF8') as json_file:
+            data = json.load(json_file)
+        with open('LastSeq.json', 'w', encoding='UTF8') as json_file:
+            data[title] = seq
+            json.dump(data, json_file, ensure_ascii=False)
+    except Exception as ex:
+        logger.error(ex)
+
+#마지막 받은 페이지 호출
+def getLastSeq(title):
+    try:
+        with open('LastSeq.json', 'rt', encoding='UTF8') as json_file:
+            data = json.load(json_file)
+            if title in data :
+                seq = data[title]
+            else:
+                seq = ''
+
+        return seq
+    except Exception as ex:
+        logger.error(ex)
+        return
+
 #json url 로드
 def geturl():
     try:
@@ -51,7 +81,7 @@ def geturl():
             data["wtoon"] = mainUrl.wtoon
             data["manamoa"] = mainUrl.manamoa
             data["newtoki"] = mainUrl.newtoki
-            json.dump(data, json_file)
+            json.dump(data, json_file, ensure_ascii=False)
 
         logger.info('json로드 완료')
     except Exception as ex:
@@ -114,14 +144,15 @@ def bracket(text):
 
 #크롤링할 웹툰들 로드
 def getList():
-    list = {}
+    list = []
     try:
         logger.info('리스트 로드')
-        with open('list.txt', 'r', encoding='utf-8') as f:
+        with open('list.txt', 'rt', encoding='utf-8') as f:
             div = ''
             lines = f.read().split()
             for line in lines:
                 if line.isspace(): continue
+                page = pageList()
                 if line == bracket(Type.manamoa):
                     div = Type.manamoa
                     continue
@@ -149,7 +180,9 @@ def getList():
                 elif line == bracket(Type.wtoon):
                     div = Type.wtoon
                     continue
-                list[div] = line
+                page.pageType = div
+                page.url = line
+                list.append(page)
 
         return list
     except Exception as ex:
