@@ -248,9 +248,9 @@ def image_search(driver, url, type):
                 #login.click()
                 #chk.send_keys(Keys.ENTER)
                 id.clear()
-                id.send_keys("sica4311@naver.com")
+                id.send_keys("")
                 pw.clear()
-                pw.send_keys("dlawls")
+                pw.send_keys("")
                 time.sleep(1)
                 chk.send_keys(Keys.ENTER)
                 time.sleep(3)
@@ -322,9 +322,9 @@ def login(driver,type):
             pw = driver.find_element_by_id("inputPwd")  # 비밀번호를 입력할 input 위치
             login_button = driver.find_element_by_id("loginBtn")  # 로그인버튼
             id.clear()
-            id.send_keys("fl2004")
+            id.send_keys("")
             pw.clear()
-            pw.send_keys("dlawls0205")
+            pw.send_keys("")
             login_button.click()
             time.sleep(1)
 
